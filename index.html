@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Photo Studio — обработка фото по промпту с ИИ</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(1200px 700px at 8% -12%, #1a1240 0%, transparent 60%),
+      radial-gradient(900px 600px at 108% 4%, #0e2b3a 0%, transparent 55%),
+      #06070d;
+    color:#e7eefb;
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    min-height:100vh;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1400px;margin:0 auto;padding:26px 20px 60px}
+
+  /* ---------- header ---------- */
+  .top{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;margin-bottom:22px}
+  .brand{display:flex;gap:14px;align-items:center}
+  .logo{
+    width:48px;height:48px;border-radius:14px;display:grid;place-items:center;font-size:24px;
+    background:linear-gradient(135deg,#a78bfa,#5eead4);
+    color:#08111a;font-weight:900;
+    box-shadow:0 10px 30px -8px rgba(167,139,250,.65);
+  }
+  h1{margin:0;font-size:22px;letter-spacing:.2px}
+  .brand p{margin:2px 0 0;color:#8f9dba;font-size:13px}
+  .badge{
+    font-size:12.5px;color:#a9b8d4;border:1px solid #26314b;background:#0e1224;
+    padding:8px 14px;border-radius:999px;white-space:nowrap
+  }
+  .badge b{color:#a78bfa;font-weight:600}
+
+  /* ---------- mode tabs ---------- */
+  .modes{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+  .mode{
+    padding:11px 18px;border-radius:12px;font-size:13.5px;font-weight:500;
+    background:#0e1224;border:1px solid #26314b;color:#b6c5dd;cursor:pointer;transition:.16s
+  }
+  .mode:hover{border-color:#3d4a6d;color:#e7eefb}
+  .mode.on{
+    background:linear-gradient(135deg,rgba(167,139,250,.22),rgba(94,234,212,.18));
+    border-color:#7c6ee0;color:#fff;
+    box-shadow:0 0 0 3px rgba(167,139,250,.11);
+  }
+  .mode .ico{margin-right:7px}
+
+  /* ---------- layout ---------- */
+  .grid{display:grid;grid-template-columns:1.55fr 1fr;gap:20px;align-items:start}
+  @media(max-width:1000px){.grid{grid-template-columns:1fr}}
+
+  .card{
+    background:linear-gradient(180deg,#0f1428,#0a0e1d);
+    border:1px solid #1c2544;border-radius:20px;
+    box-shadow:0 26px 60px -30px rgba(0,0,0,.95);
+  }
+
+  /* ---------- stage ---------- */
+  .stage{
+    margin:16px;min-height:380px;max-height:68vh;
+    display:flex;align-items:center;justify-content:center;position:relative;
+    background:
+      linear-gradient(45deg,#0a0f1c 25%,transparent 25%,transparent 75%,#0a0f1c 75%),
+      linear-gradient(45deg,#0a0f1c 25%,#0c1220 25%,#0c1220 75%,#0a0f1c 75%);
+    background-size:26px 26px;background-position:0 0,13px 13px;
+    border:1px solid #1b2340;border-radius:16px;overflow:hidden;
+  }
+  .stage img{
+    max-width:100%;max-height:68vh;display:block;border-radius:6px;
+  }
+  .empty{
+    text-align:center;color:#6d7c99;padding:40px 24px;
+  }
+  .empty .big{font-size:48px;margin-bottom:12px;opacity:.55}
+  .empty h3{margin:0 0 6px;color:#b6c5dd;font-size:16px;font-weight:600}
+  .empty p{margin:0;font-size:13.5px}
+
+  /* loader */
+  .loader{
+    position:absolute;inset:0;display:none;place-items:center;
+    background:rgba(6,7,13,.82);backdrop-filter:blur(6px);z-index:5;
+  }
+  .loader.on{display:grid}
+  .spin{
+    width:48px;height:48px;border-radius:50%;
+    border:3px solid rgba(167,139,250,.2);
+    border-top-color:#a78bfa;
+    animation:sp 0.9s linear infinite;
+  }
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .loader .txt{margin-top:14px;font-size:13.5px;color:#b6c5dd;text-align:center}
+  .loader .inner{display:grid;place-items:center}
+
+  .stage-bar{display:flex;gap:10px;align-items:center;padding:0 16px 16px;flex-wrap:wrap}
+  .spacer{flex:1}
+  .meta{font-size:12.5px;color:#7f90ac}
+
+  /* ---------- buttons ---------- */
+  button{font:inherit;cursor:pointer;border-radius:12px;transition:.16s;border:1px solid transparent}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .ghost{
+    background:#0e1428;border-color:#243057;color:#c9d6ea;padding:9px 15px;font-size:13.5px
+  }
+  .ghost:hover:not(:disabled){background:#141b36;border-color:#354270}
+  .ghost.on{background:#1e2a4a;border-color:#5b6bd0;color:#c8d0ff}
+  .primary{
+    width:100%;padding:15px;font-size:15px;font-weight:600;color:#06121a;
+    background:linear-gradient(135deg,#a78bfa,#5eead4);
+    box-shadow:0 14px 34px -14px rgba(167,139,250,.75);
+  }
+  .primary:hover:not(:disabled){filter:brightness(1.08)}
+  .primary:active:not(:disabled){transform:translateY(1px)}
+
+  /* ---------- panel ---------- */
+  .panel{padding:20px}
+  .panel label{display:block;font-size:12.5px;letter-spacing:.6px;text-transform:uppercase;color:#7f90ac;margin-bottom:9px}
+  textarea{
+    width:100%;min-height:110px;resize:vertical;padding:14px;border-radius:14px;
+    background:#080c18;border:1px solid #222c4c;color:#e7eefb;font:inherit;line-height:1.5;
+    outline:none;transition:.16s;
+  }
+  textarea:focus{border-color:#a78bfa;box-shadow:0 0 0 3px rgba(167,139,250,.16)}
+  textarea::placeholder{color:#5c6b85}
+
+  .examples{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0 16px}
+  .ex{
+    font-size:12px;padding:6px 11px;border-radius:999px;cursor:pointer;
+    background:#0e1428;border:1px solid #243057;color:#9fb3d1;transition:.15s
+  }
+  .ex:hover{border-color:#a78bfa;color:#d8ccff}
+
+  /* upload zone (compact) */
+  .upload{
+    display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:14px;
+    border:1.5px dashed #2a3660;border-radius:14px;background:#080c18;cursor:pointer;transition:.16s
+  }
+  .upload:hover,.upload.over{border-color:#a78bfa;background:#0c1122}
+  .upload .thumb{
+    width:52px;height:52px;border-radius:10px;background:#0e1428;flex-shrink:0;
+    display:grid;place-items:center;overflow:hidden;border:1px solid #243057
+  }
+  .upload .thumb img{width:100%;height:100%;object-fit:cover}
+  .upload .thumb .ph{font-size:20px;color:#5b6bb5}
+  .upload .txt{font-size:13px;color:#9fb3d1;line-height:1.35}
+  .upload .txt b{color:#e7eefb;display:block;font-size:13.5px;margin-bottom:1px;font-weight:600}
+  .upload .txt small{color:#6d7c99;font-size:12px}
+
+  /* settings row */
+  .settings{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field label{margin:0;font-size:11.5px}
+  .field select,.field input[type=number]{
+    padding:9px 11px;border-radius:10px;background:#080c18;border:1px solid #222c4c;
+    color:#e7eefb;font:inherit;font-size:13px;outline:none;width:100%
+  }
+  .field select:focus,.field input:focus{border-color:#a78bfa}
+
+  .hint{
+    font-size:12px;color:#6d7c99;margin-top:14px;padding:10px 12px;
+    background:#0a0e1d;border:1px solid #1c2544;border-radius:10px;line-height:1.5
+  }
+  .hint b{color:#a78bfa;font-weight:600}
+
+  footer{margin-top:26px;text-align:center;color:#5d6b85;font-size:12.5px}
+  footer a{color:#a78bfa;text-decoration:none}
+
+  /* toast */
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:#1a2138;border:1px solid #2f3a5e;color:#e7eefb;
+    padding:12px 20px;border-radius:12px;font-size:13.5px;
+    box-shadow:0 20px 40px -12px rgba(0,0,0,.7);
+    opacity:0;pointer-events:none;transition:.3s;z-index:99;max-width:90vw;text-align:center
+  }
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <div class="logo">✦</div>
+      <div>
+        <h1>AI Photo Studio</h1>
+        <p>Обработка и генерация фото по промпту с настоящим ИИ</p>
+      </div>
+    </div>
+    <div class="badge">Модель <b>Flux / Kontext</b> · без ключей · без лимитов</div>
+  </header>
+
+  <!-- ---------- РЕЖИМЫ ---------- -->
+  <div class="modes" id="modes">
+    <button class="mode on" data-mode="gen"><span class="ico">🎨</span>AI-генерация</button>
+    <button class="mode" data-mode="edit"><span class="ico">✨</span>AI-редактирование</button>
+    <button class="mode" data-mode="local"><span class="ico">⚙️</span>Локальные фильтры</button>
+  </div>
+
+  <main class="grid">
+
+    <!-- ---------- ПРЕВЬЮ ---------- -->
+    <section class="card">
+      <div class="stage" id="stage">
+        <div class="empty" id="emptyState">
+          <div class="big">◈</div>
+          <h3>Здесь появится результат</h3>
+          <p>Введите промпт справа и нажмите «Сгенерировать»</p>
+        </div>
+        <img id="resultImg" alt="Результат" style="display:none">
+        <div class="loader" id="loader">
+          <div class="inner">
+            <div class="spin"></div>
+            <div class="txt" id="loaderTxt">ИИ рисует…<br><span style="opacity:.6;font-size:12px">обычно 3–15 секунд</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage-bar" id="stageBar" style="display:none">
+        <span class="meta" id="meta"></span>
+        <div class="spacer"></div>
+        <button class="ghost" id="regenBtn">↻ Ещё вариант</button>
+        <button class="ghost" id="downloadBtn">⤓ Скачать</button>
+      </div>
+    </section>
+
+    <!-- ---------- ПАНЕЛЬ ---------- -->
+    <aside class="card panel">
+
+      <!-- загрузка фото (для edit/local) -->
+      <div class="upload" id="uploadBox" style="display:none">
+        <div class="thumb" id="thumb"><span class="ph">＋</span></div>
+        <div class="txt">
+          <b id="upTitle">Загрузить фото</b>
+          <small id="upSub">Нажмите или перетащите · JPG / PNG / WEBP</small>
+        </div>
+        <input type="file" id="fileInput" accept="image/*" hidden>
+      </div>
+
+      <label for="prompt">Промпт</label>
+      <textarea id="prompt" placeholder="Опишите, что хотите получить или как изменить фото…"></textarea>
+
+      <div class="examples" id="examples"></div>
+
+      <!-- настройки (только для AI) -->
+      <div id="aiSettings">
+        <div class="settings">
+          <div class="field">
+            <label for="ratio">Формат</label>
+            <select id="ratio">
+              <option value="1:1">1:1 · квадрат</option>
+              <option value="16:9">16:9 · широкий</option>
+              <option value="9:16">9:16 · вертикаль</option>
+              <option value="4:3">4:3</option>
+              <option value="3:4">3:4</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="model">Модель</label>
+            <select id="model">
+              <option value="flux">Flux · качество</option>
+              <option value="turbo">Turbo · быстро</option>
+              <option value="flux-realism">Flux Realism</option>
+              <option value="flux-anime">Flux Anime</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings" style="margin-bottom:14px">
+          <div class="field">
+            <label for="seed">Seed (0 = случайно)</label>
+            <input type="number" id="seed" value="0" min="0" max="999999">
+          </div>
+          <div class="field">
+            <label for="strength">Сила изменения</label>
+            <select id="strength">
+              <option value="0.9">Сильно (0.9)</option>
+              <option value="0.75" selected>Средне (0.75)</option>
+              <option value="0.5">Слабо (0.5)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <button class="primary" id="runBtn">🎨 Сгенерировать</button>
+
+      <div class="hint" id="hint">
+        <b>Совет:</b> пишите на русском — ИИ понимает. Указывайте стиль, свет, настроение.<br>
+        Например: <i>«кинематографичный портрет, тёплый закатный свет, мягкое боке»</i>
+      </div>
+    </aside>
+
+  </main>
+
+  <footer>
+    Работает на <a href="https://pollinations.ai" target="_blank">Pollinations.ai</a> · Flux / Kontext · бесплатно и без ключей
+  </footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   AI Photo Studio
+   - Pollinations.ai: text-to-image + image-to-image (Kontext)
+   - Локальный фильтр-движок как fallback
+   ========================================================= */
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => v<a?a:(v>b?b:v);
+
+const state = {
+  mode: 'gen',           // gen | edit | local
+  sourceImage: null,     // HTMLImageElement или null
+  sourceFile: null,
+  lastBlobUrl: null,
+  lastPrompt: '',
+  lastSeed: null
+};
+
+/* ---------- соотношения ---------- */
+const RATIOS = {
+  '1:1':  [1024, 1024],
+  '16:9': [1344, 768],
+  '9:16': [768, 1344],
+  '4:3':  [1152, 864],
+  '3:4':  [864, 1152]
+};
+
+/* ---------- примеры промптов по режимам ---------- */
+const EXAMPLES = {
+  gen: [
+    'кинематографичный портрет девушки, тёплый закатный свет, мягкое боке',
+    'неоновый киберпанк-город под дождём, отражения, 8k',
+    'минималистичный натюрморт, пастельные тона, студийный свет',
+    'акварельный пейзаж с горами, туман, рассвет',
+    'фотореалистичный кот-астронавт на Луне, гиперреализм',
+    'изометрическая иллюстрация уютной комнаты, тёплый свет'
+  ],
+  edit: [
+    'сделай закат, тёплые тона, лёгкая дымка',
+    'преврати в зимнюю сцену, холодный тон, снег',
+    'стиль киберпанк, неоновые огни, ночь',
+    'акварельная живопись, мягкие края',
+    'чёрно-белое кино, высокий контраст, зерно',
+    'аниме-стиль, яркие цвета, cel-shading'
+  ],
+  local: [
+    'сделай ярче и контрастнее, добавь насыщенности',
+    'чёрно-белый винтаж с зерном и виньеткой',
+    'тёплый закат, мягкое размытие, виньетка',
+    'резкий HDR, драматичный контраст',
+    'квадратный кроп, скруглённые углы, рамка 20',
+    'повернуть на 90, отражение, пикселизация 12'
+  ]
+};
+
+/* =========================================================
+   ЛОКАЛЬНЫЙ ДВИЖОК (из предыдущей версии)
+   ========================================================= */
+const DEFAULTS = () => ({
+  brightness:1, contrast:1, saturate:1, hue:0, blur:0,
+  sepia:0, grayscale:0, invert:0,
+  warm:0, cool:0, sharpen:0, vignette:0, grain:0, pixelate:0,
+  flipH:false, flipV:false, rotate:0,
+  cropSquare:false, frame:0, radius:0, outWidth:0
+});
+
+const RULES = [
+  { re:/(темн|затемн|притемн|darken|darker|тёмн)/, label:'Темнее', fn:(s,n)=>s.brightness-=(n===null?.25:n/100) },
+  { re:/(ярч|ярк|светл|освет|подсвет|экспозиц|lighten|bright)/, label:'Ярче', fn:(s,n)=>s.brightness+=(n===null?.22:n/100) },
+  { re:/(контраст|contrast)/, label:'Контраст+', fn:(s,n)=>s.contrast+=(n===null?.3:n/100) },
+  { re:/(мягк|fade|приглуш|пастельн|плоск|блёкл|блекл|выцветш)/, label:'Мягкость', fn:(s,n)=>s.contrast-=(n===null?.2:n/100) },
+  { re:/(насыщ|сочн|saturat|vivid)/, label:'Насыщенность+', fn:(s,n)=>s.saturate+=(n===null?.4:n/100) },
+  { re:/(обесцвеч|бледн|ненасыщ|desaturat|тускл)/, label:'Обесцвечивание', fn:(s,n)=>s.saturate-=(n===null?.4:n/100) },
+  { re:/(чёрно[-\s]?бел|черно[-\s]?бел|ч\/б|\bчб\b|монохром|grayscale|greyscale)/, label:'Ч/Б', fn:(s,n)=>s.grayscale=(n===null?100:n) },
+  { re:/(сепия|сепи|sepia|винтаж|vintage|ретро|retro|старин)/, label:'Сепия', fn:(s,n)=>s.sepia=clamp((n===null?75:n),0,100) },
+  { re:/(инверт|негатив|invert)/, label:'Негатив', fn:(s,n)=>s.invert=(n===null?100:n) },
+  { re:/(размыт|размыть|блюр|blur|расфокус|боке)/, label:'Размытие', fn:(s,n)=>s.blur+=(n===null?4:n) },
+  { re:/(резк|резче|чётк|четк|детализ|sharp|clarity)/, label:'Резкость', fn:(s,n)=>s.sharpen+=(n===null?1:n/20) },
+  { re:/(тёпл|тепл|warm|золотист|солнечн|оранж)/, label:'Тёплый тон', fn:(s,n)=>s.warm+=(n===null?.35:n/100) },
+  { re:/(холодн|прохладн|син[ийеяю]|голуб|blue|морозн)/, label:'Холодный тон', fn:(s,n)=>s.cool+=(n===null?.35:n/100) },
+  { re:/(отраж|зеркал|mirror|flip\s*h|по горизонтали)/, label:'Отражение ↔', fn:s=>s.flipH=!s.flipH },
+  { re:/(вверх ногами|flip\s*v|по вертикали)/, label:'Отражение ↕', fn:s=>s.flipV=!s.flipV },
+  { re:/(поверн|поворот|rotate|наклон)/, label:'Поворот', fn:(s,n)=>s.rotate+=(n===null?90:n) },
+  { re:/(квадрат|square|crop|кроп|обрезать|1:1)/, label:'Квадратный кроп', fn:s=>s.cropSquare=true },
+  { re:/(виньет|vignette|затемнить по краям|по краям)/, label:'Виньетка', fn:(s,n)=>s.vignette=clamp(s.vignette+(n===null?.5:n/100),0,1) },
+  { re:/(рамк|рамка|рамку|границ|обводк|border|frame|паспарту)/, label:'Рамка', fn:(s,n)=>s.frame+=(n===null?14:n) },
+  { re:/(скругл|закругл|округл|radius|rounded)/, label:'Скругление', fn:(s,n)=>s.radius+=(n===null?26:n) },
+  { re:/(зерн|шум|гранул|grain|noise|плёнк|пленк|film)/, label:'Зерно', fn:(s,n)=>s.grain+=(n===null?22:n) },
+  { re:/(пиксел|pixel|мозаик|8[-\s]?бит)/, label:'Пикселизация', fn:(s,n)=>s.pixelate+=(n===null?9:n) },
+  { re:/(ширин|width|resize|размер|уменьшить до|увеличить до)/, label:'Размер', fn:(s,n)=>s.outWidth=(n===null?1280:n) },
+  { re:/(оттенок|hue|цветовой тон)/, label:'Оттенок', fn:(s,n)=>s.hue+=(n===null?40:n) },
+  { re:/(hdr|драматич|драма|жёстк|жестк)/, label:'HDR', fn:s=>{s.contrast+=.4;s.saturate+=.35;s.sharpen+=1;s.brightness-=.05} },
+  { re:/(закат|sunset|золотой час|рассвет)/, label:'Закат', fn:s=>{s.warm+=.5;s.saturate+=.25;s.brightness+=.05;s.contrast+=.1} },
+  { re:/(зимн|winter|снежн)/, label:'Зима', fn:s=>{s.cool+=.4;s.saturate-=.15;s.brightness+=.08} },
+  { re:/(летн|summer|тропич)/, label:'Лето', fn:s=>{s.warm+=.35;s.saturate+=.3;s.brightness+=.05} },
+  { re:/(ночн|ночь|night|лунн)/, label:'Ночь', fn:s=>{s.brightness-=.3;s.cool+=.3;s.vignette+=.5;s.contrast+=.15} },
+  { re:/(плёночн|пленочн|кинематограф|cinematic|кино)/, label:'Плёнка', fn:s=>{s.grain+=18;s.contrast-=.1;s.warm+=.15;s.saturate-=.1} }
+];
+
+function parsePrompt(text){
+  const s = DEFAULTS(); const found = [];
+  if(!text || !text.trim()) return {state:s, found};
+  const clauses = text.toLowerCase().split(/[,;.\n!?]|\s+и\s+|\s+and\s+|\s+плюс\s+/).map(c=>c.trim()).filter(Boolean);
+  const seen = new Set();
+  for(const clause of clauses){
+    const m = clause.match(/([+-]?\s*\d+(?:[.,]\d+)?)/);
+    const n = m ? parseFloat(m[1].replace(/\s/g,'').replace(',','.')) : null;
+    for(const rule of RULES){
+      if(rule.re.test(clause)){
+        rule.fn(s, n);
+        if(!seen.has(rule.label)){ seen.add(rule.label); found.push(rule.label); }
+      }
+    }
+  }
+  s.brightness=clamp(s.brightness,0,4); s.contrast=clamp(s.contrast,0,4);
+  s.saturate=clamp(s.saturate,0,5); s.warm=clamp(s.warm,0,1); s.cool=clamp(s.cool,0,1);
+  s.sharpen=clamp(s.sharpen,0,3); s.blur=clamp(s.blur,0,40); s.pixelate=clamp(s.pixelate,0,200);
+  s.grain=clamp(s.grain,0,90); s.frame=clamp(s.frame,0,200); s.radius=clamp(s.radius,0,600);
+  s.outWidth=clamp(s.outWidth,0,8000); s.rotate=((s.rotate%360)+360)%360;
+  return {state:s, found};
+}
+
+function filterString(s){
+  const p=[];
+  if(s.brightness!==1)p.push(`brightness(${s.brightness.toFixed(3)})`);
+  if(s.contrast!==1)p.push(`contrast(${s.contrast.toFixed(3)})`);
+  if(s.saturate!==1)p.push(`saturate(${s.saturate.toFixed(3)})`);
+  if(s.hue)p.push(`hue-rotate(${s.hue}deg)`);
+  if(s.blur)p.push(`blur(${s.blur}px)`);
+  if(s.sepia)p.push(`sepia(${s.sepia}%)`);
+  if(s.grayscale)p.push(`grayscale(${s.grayscale}%)`);
+  if(s.invert)p.push(`invert(${s.invert}%)`);
+  return p.length?p.join(' '):'none';
+}
+
+function roundRectPath(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);     ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function applySharpen(canvas, amount){
+  const ctx=canvas.getContext('2d'); const W=canvas.width,H=canvas.height;
+  const src=ctx.getImageData(0,0,W,H); const out=ctx.createImageData(W,H);
+  const s=src.data,d=out.data; const c0=1+4*amount,c1=-amount; const row=W*4;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const i=(y*W+x)*4;
+    for(let ch=0;ch<3;ch++){
+      let v=s[i+ch]*c0;
+      if(x>0)v+=s[i-4+ch]*c1; if(x<W-1)v+=s[i+4+ch]*c1;
+      if(y>0)v+=s[i-row+ch]*c1; if(y<H-1)v+=s[i+row+ch]*c1;
+      d[i+ch]=v<0?0:v>255?255:v;
+    }
+    d[i+3]=s[i+3];
+  }
+  ctx.putImageData(out,0,0);
+}
+
+function renderLocal(canvas, img, s){
+  let sx=0,sy=0,sw=img.naturalWidth,sh=img.naturalHeight;
+  if(s.cropSquare){const side=Math.min(sw,sh);sx=(sw-side)/2;sy=(sh-side)/2;sw=sh=side;}
+  const MAXSIDE=3200; let pre=1;
+  if(Math.max(sw,sh)>MAXSIDE) pre=MAXSIDE/Math.max(sw,sh);
+  const rad=s.rotate*Math.PI/180;
+  const cos=Math.abs(Math.cos(rad)), sin=Math.abs(Math.sin(rad));
+  const bw=sw*cos+sh*sin, bh=sw*sin+sh*cos;
+  let scale=pre; if(s.outWidth>0) scale=s.outWidth/bw;
+  const W=Math.max(1,Math.round(bw*scale)), H=Math.max(1,Math.round(bh*scale));
+  canvas.width=W; canvas.height=H;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,W,H); ctx.imageSmoothingQuality='high';
+  ctx.save();
+  ctx.translate(W/2,H/2); ctx.rotate(rad);
+  ctx.scale(s.flipH?-1:1, s.flipV?-1:1);
+  ctx.filter=filterString(s);
+  ctx.drawImage(img,sx,sy,sw,sh,-(sw*scale)/2,-(sh*scale)/2,sw*scale,sh*scale);
+  ctx.restore(); ctx.filter='none';
+
+  if(s.warm>0){ctx.save();ctx.globalCompositeOperation='soft-light';ctx.fillStyle=`rgba(255,148,42,${s.warm})`;ctx.fillRect(0,0,W,H);ctx.restore();}
+  if(s.cool>0){ctx.save();ctx.globalCompositeOperation='soft-light';ctx.fillStyle=`rgba(64,140,255,${s.cool})`;ctx.fillRect(0,0,W,H);ctx.restore();}
+
+  if(s.pixelate>1){
+    const pw=Math.max(1,Math.round(W/s.pixelate)), ph=Math.max(1,Math.round(H/s.pixelate));
+    const tmp=document.createElement('canvas'); tmp.width=pw; tmp.height=ph;
+    tmp.getContext('2d').drawImage(canvas,0,0,pw,ph);
+    ctx.imageSmoothingEnabled=false;
+    ctx.clearRect(0,0,W,H); ctx.drawImage(tmp,0,0,pw,ph,0,0,W,H);
+    ctx.imageSmoothingEnabled=true;
+  }
+
+  if(s.grain>0){
+    const id=ctx.getImageData(0,0,W,H); const d=id.data; const amp=s.grain*2.2;
+    for(let i=0;i<d.length;i+=4){
+      const n=(Math.random()-.5)*amp;
+      d[i]=clamp(d[i]+n,0,255); d[i+1]=clamp(d[i+1]+n,0,255); d[i+2]=clamp(d[i+2]+n,0,255);
+    }
+    ctx.putImageData(id,0,0);
+  }
+
+  if(s.sharpen>0) applySharpen(canvas, s.sharpen);
+
+  if(s.vignette>0){
+    const g=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*.28, W/2,H/2,Math.max(W,H)*.75);
+    g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,`rgba(0,0,0,${s.vignette})`);
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  }
+  if(s.frame>0){ctx.save();ctx.strokeStyle='#fff';ctx.lineWidth=s.frame*2;ctx.strokeRect(0,0,W,H);ctx.restore();}
+  if(s.radius>0){
+    const r=Math.min(s.radius, Math.min(W,H)/2);
+    ctx.save(); ctx.globalCompositeOperation='destination-in';
+    roundRectPath(ctx,0,0,W,H,r); ctx.fill(); ctx.restore();
+  }
+  return canvas;
+}
+
+/* =========================================================
+   AI-ДВИЖОК (Pollinations)
+   ========================================================= */
+function buildAiUrl(prompt, w, h, seed, model){
+  const enc = encodeURIComponent(prompt);
+  const params = new URLSearchParams({
+    width: w, height: h, seed: seed,
+    model: model, nologo: 'true', enhance: 'true'
+  });
+  return `https://image.pollinations.ai/prompt/${enc}?${params.toString()}`;
+}
+
+/* Конвертация файла в dataURL */
+function fileToDataURL(file){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+/* Скачиваем AI-картинку как blob (обход CORS на прямой download) */
+async function fetchAsBlob(url){
+  const res = await fetch(url, { mode: 'cors' });
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  return await res.blob();
+}
+
+/* =========================================================
+   UI
+   ========================================================= */
+function toast(msg, ms=3200){
+  const t = $('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._tid);
+  t._tid = setTimeout(()=>t.classList.remove('on'), ms);
+}
+
+function setLoading(on, text){
+  $('loader').classList.toggle('on', on);
+  $('runBtn').disabled = on;
+  $('regenBtn').disabled = on;
+  if(text) $('loaderTxt').innerHTML = text;
+}
+
+function showResult(url){
+  const img = $('resultImg');
+  img.style.display = 'block';
+  $('emptyState').style.display = 'none';
+  img.src = url;
+  $('stageBar').style.display = 'flex';
+
+  if(state.lastBlobUrl && state.lastBlobUrl.startsWith('blob:')){
+    URL.revokeObjectURL(state.lastBlobUrl);
+  }
+  state.lastBlobUrl = url;
+}
+
+function updateExampleChips(){
+  const box = $('examples');
+  box.innerHTML = '';
+  (EXAMPLES[state.mode] || []).forEach(p => {
+    const b = document.createElement('button');
+    b.className = 'ex'; b.type = 'button'; b.textContent = p;
+    b.onclick = () => { $('prompt').value = p; };
+    box.appendChild(b);
+  });
+}
+
+function updateModeUI(){
+  // видимость загрузки: показываем для edit и local
+  $('uploadBox').style.display = (state.mode === 'edit' || state.mode === 'local') ? 'flex' : 'none';
+  $('aiSettings').style.display = (state.mode === 'edit' || state.mode === 'gen') ? 'block' : 'none';
+
+  // заголовок кнопки
+  const btn = $('runBtn');
+  if(state.mode === 'gen')  btn.textContent = '🎨 Сгенерировать';
+  if(state.mode === 'edit') btn.textContent = '✨ Преобразовать';
+  if(state.mode === 'local') btn.textContent = '⚙️ Обработать';
+
+  // подсказка
+  const hints = {
+    gen:   '<b>Совет:</b> описывайте сцену полностью — стиль, свет, настроение, детали.<br>Например: <i>«кинематографичный портрет, тёплый закатный свет, мягкое боке»</i>',
+    edit:  '<b>Режим редактирования:</b> загрузите фото и опишите, что хотите изменить. ИИ перерисует его, сохранив композицию.<br>Например: <i>«сделай закат, тёплые тона»</i>',
+    local: '<b>Локальный режим:</b> работает без интернета, мгновенно. Понимает команды яркости, контраста, цветокоррекции, кропа.'
+  };
+  $('hint').innerHTML = hints[state.mode];
+
+  // placeholder
+  const ph = {
+    gen:   'Опишите желаемое изображение…',
+    edit:  'Что изменить на фото?',
+    local: 'Например: ярче, контрастнее, тёплый тон, виньетка 50'
+  };
+  $('prompt').placeholder = ph[state.mode];
+
+  updateExampleChips();
+}
+
+/* ---------- загрузка файла ---------- */
+function loadFile(file){
+  if(!file || !file.type.startsWith('image/')) return;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    state.sourceImage = img;
+    state.sourceFile = file;
+
+    // превью-миниатюра в зоне загрузки
+    const thumb = $('thumb');
+    thumb.innerHTML = '';
+    const t = document.createElement('img');
+    t.src = url; thumb.appendChild(t);
+
+    $('upTitle').textContent = file.name.length > 22 ? file.name.slice(0,20)+'…' : file.name;
+    $('upSub').textContent = `${img.naturalWidth}×${img.naturalHeight} · нажмите, чтобы заменить`;
+
+    // сразу показываем на сцене (для local — результат, для edit — как референс)
+    showResult(url);
+    // для edit оставим оригинал как визуальную подсказку, пока не запущен AI
+    if(state.mode === 'edit'){
+      $('meta').textContent = 'Загружено · ' + img.naturalWidth + '×' + img.naturalHeight + ' px';
+    }
+    URL.revokeObjectURL(url);
+  };
+  img.onerror = () => toast('Не удалось прочитать изображение');
+  img.src = url;
+}
+
+/* =========================================================
+   ГЛАВНАЯ ФУНКЦИЯ — обработка / генерация
+   ========================================================= */
+async function run(){
+  const prompt = $('prompt').value.trim();
+  if(!prompt){ toast('Введите промпт'); $('prompt').focus(); return; }
+
+  state.lastPrompt = prompt;
+
+  /* ---------- LOCAL ---------- */
+  if(state.mode === 'local'){
+    if(!state.sourceImage){ toast('Сначала загрузите фото'); return; }
+    const { state: s } = parsePrompt(prompt);
+    const canvas = document.createElement('canvas');
+    renderLocal(canvas, state.sourceImage, s);
+    canvas.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      showResult(url);
+      $('meta').textContent = `${canvas.width} × ${canvas.height} px · локально`;
+    }, 'image/png');
+    return;
+  }
+
+  /* ---------- AI (gen / edit) ---------- */
+  const [w,h] = RATIOS[$('ratio').value] || [1024,1024];
+  const model = $('model').value;
+  let seed = parseInt($('seed').value) || 0;
+  if(seed === 0) seed = Math.floor(Math.random()*1e6);
+  state.lastSeed = seed;
+
+  setLoading(true, state.mode === 'edit'
+    ? 'ИИ перерисовывает фото…<br><span style="opacity:.6;font-size:12px">модель Kontext · 5–20 секунд</span>'
+    : 'ИИ рисует…<br><span style="opacity:.6;font-size:12px">обычно 3–15 секунд</span>');
+
+  let url;
+  try {
+    if(state.mode === 'edit' && state.sourceImage){
+      /* --- img2img через Pollinations Kontext ---
+         Передаём изображение как dataURL в параметре image.
+         Для больших фото уменьшаем до 512px, чтобы уложиться в URL. */
+      const small = document.createElement('canvas');
+      const maxSide = 512;
+      const sw = state.sourceImage.naturalWidth, sh = state.sourceImage.naturalHeight;
+      const k = Math.min(1, maxSide / Math.max(sw, sh));
+      small.width  = Math.round(sw * k);
+      small.height = Math.round(sh * k);
+      small.getContext('2d').drawImage(state.sourceImage, 0, 0, small.width, small.height);
+
+      const dataUrl = small.toDataURL('image/jpeg', 0.72);
+      const params = new URLSearchParams({
+        width: w, height: h, seed: seed, nologo: 'true',
+        model: 'kontext',
+        image: dataUrl,
+        strength: $('strength').value
+      });
+      url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?${params.toString()}`;
+    } else {
+      url = buildAiUrl(prompt, w, h, seed, model);
+    }
+
+    // Прогреваем: загружаем через Image() — так Pollinations отдаёт картинку напрямую
+    await new Promise((resolve, reject) => {
+      const probe = new Image();
+      probe.crossOrigin = 'anonymous';
+      const timeout = setTimeout(() => reject(new Error('timeout')), 90000);
+      probe.onload = () => { clearTimeout(timeout); resolve(); };
+      probe.onerror = () => { clearTimeout(timeout); reject(new Error('load error')); };
+      probe.src = url;
+    });
+
+    // Показываем результат
+    showResult(url);
+    $('meta').textContent = `${w} × ${h} px · ${model === 'flux' && state.mode==='edit' ? 'kontext' : model} · seed ${seed}`;
+    toast('Готово! Можно скачать.');
+  } catch(err){
+    console.error(err);
+    toast('Не удалось получить ответ от ИИ. Проверьте интернет и попробуйте ещё раз.', 5000);
+  } finally {
+    setLoading(false);
+  }
+}
+
+/* =========================================================
+   СКАЧИВАНИЕ
+   ========================================================= */
+async function download(){
+  if(!state.lastBlobUrl){ toast('Нечего скачивать'); return; }
+
+  // локальный результат — сразу blob
+  if(state.lastBlobUrl.startsWith('blob:')){
+    const a = document.createElement('a');
+    a.href = state.lastBlobUrl;
+    a.download = `aiphoto_${Date.now()}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+    return;
+  }
+
+  // AI-картинка — тянем как blob (обход cross-origin download)
+  try {
+    toast('Готовим файл…', 1500);
+    const blob = await fetchAsBlob(state.lastBlobUrl);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `aiphoto_${state.lastSeed || Date.now()}.jpg`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+  } catch {
+    // fallback — открываем в новой вкладке
+    window.open(state.lastBlobUrl, '_blank');
+  }
+}
+
+/* =========================================================
+   СОБЫТИЯ
+   ========================================================= */
+document.querySelectorAll('.mode').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mode').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    state.mode = btn.dataset.mode;
+    updateModeUI();
+  });
+});
+
+$('runBtn').addEventListener('click', run);
+$('regenBtn').addEventListener('click', () => {
+  // «Ещё вариант» — сбрасываем seed в 0 (случайный) и запускаем
+  $('seed').value = 0;
+  run();
+});
+$('downloadBtn').addEventListener('click', download);
+
+/* Ctrl+Enter — запуск */
+$('prompt').addEventListener('keydown', e => {
+  if((e.ctrlKey || e.metaKey) && e.key === 'Enter'){ e.preventDefault(); run(); }
+});
+
+/* --- загрузка файла --- */
+$('uploadBox').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', e => {
+  if(e.target.files && e.target.files[0]) loadFile(e.target.files[0]);
+});
+['dragenter','dragover'].forEach(ev =>
+  $('uploadBox').addEventListener(ev, e => { e.preventDefault(); $('uploadBox').classList.add('over'); })
+);
+['dragleave','drop'].forEach(ev =>
+  $('uploadBox').addEventListener(ev, e => { e.preventDefault(); $('uploadBox').classList.remove('over'); })
+);
+$('uploadBox').addEventListener('drop', e => {
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if(f) loadFile(f);
+});
+
+/* Глобальный drag&drop на страницу */
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => {
+  e.preventDefault();
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if(f && f.type.startsWith('image/')) loadFile(f);
+});
+
+/* Paste from clipboard */
+window.addEventListener('paste', e => {
+  const items = e.clipboardData && e.clipboardData.items;
+  if(!items) return;
+  for(const it of items){
+    if(it.type.startsWith('image/')){ loadFile(it.getAsFile()); break; }
+  }
+});
+
+/* init */
+updateModeUI();
+</script>
+</body>
+</html>
